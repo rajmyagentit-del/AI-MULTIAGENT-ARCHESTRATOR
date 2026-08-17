@@ -22,6 +22,24 @@ from orchestrator.graph import orchestrator_graph
 mcp = FastMCP(name="ai-multiagent-orchestrator")
 
 
+def _extract_text(content) -> str:
+    """Claude's message content is a plain string for simple responses,
+    but a list of typed blocks (thinking, text, tool_use, etc.) when
+    extended thinking is involved -- true by default for Claude Sonnet 5.
+    This pulls out only the actual answer text, discarding thinking
+    blocks so internal reasoning traces never leak into a public answer."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        text_parts = [
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "text"
+        ]
+        return "\n".join(text_parts).strip()
+    return str(content)
+
+
 async def _run_orchestration(question: str) -> dict:
     """Shared logic: runs a question through the graph, returns the final
     answer plus which specialist tools were actually used -- used by both
@@ -39,7 +57,7 @@ async def _run_orchestration(question: str) -> dict:
                 if tc["name"] not in specialists_used:
                     specialists_used.append(tc["name"])
 
-    final_answer = messages[-1].content
+    final_answer = _extract_text(messages[-1].content)
 
     return {
         "answer": final_answer,
