@@ -138,3 +138,24 @@ python -m pytest tests/ -v
 - The supervisor's routing decision logic
 - The full supervisor<->tools loop end-to-end (mocked LLM + mocked specialist)
 
+## Deployment
+
+Deployed on [Render](https://render.com) via the included `Dockerfile`, free tier. Auto-deploys on every push to `main`. Note: free tier spins down on inactivity -- the first request after idle time can take up to ~50 seconds while it cold-starts.
+
+## Engineering notes: real problems hit and fixed
+
+Documenting these because working through them honestly is more useful than pretending the build was frictionless:
+
+- **MCP client library version gap**: the initial `mcp` SDK pin (1.1.3) predated the `streamable_http` client transport needed to actually call the two live specialist servers. Diagnosed via a real `ModuleNotFoundError`, resolved by upgrading to 1.29.0 (not the newest 2.0.0 major, which introduced its own unrelated dependency conflicts).
+- **Wrong tool parameter name**: assumed `ask_database`'s parameter was `query`; the real signature uses `question`. Found via a live test against the deployed server, confirmed against the Project 1 source, fixed, and locked in with a regression test.
+- **Claude Sonnet 5 content shape**: with extended thinking enabled by default, message content is a list of typed blocks (thinking plus text), not a plain string like older models. The first live deployment leaked a raw thinking block into the public /demo/query response. Fixed with an explicit text-extraction helper and verified on the redeployed live service.
+- **Unused dependency causing a real conflict chain**: fastapi and uvicorn were added early on a guess, before settling on the FastMCP framework pattern. Neither was ever actually imported. They silently pinned starlette too old for fastmcp to install, causing a multi-layer version conflict. Root-caused by checking actual imports rather than chasing version numbers indefinitely, then removed entirely.
+- **CI failing on every historical commit**: config.py's fail-fast validation (a deliberate design choice) correctly blocked test collection in CI because no secrets exist there. Fixed with obviously-fake placeholder env vars in the workflow, safe because every test mocks the real API calls.
+
+## License
+
+MIT -- see `LICENSE`.
+
+## Credits
+
+Built on top of two other original projects in this portfolio series (`ai-sql-agent-mcp`, `ai-document-mcp`), coordinated via [LangGraph](https://github.com/langchain-ai/langgraph), [Anthropic's Claude API](https://www.anthropic.com), [Tavily](https://tavily.com), and [FastMCP](https://gofastmcp.com).
