@@ -74,3 +74,67 @@ Correctly recognized this needed no tool call at all, answered directly, and pro
 | Testing | pytest, pytest-asyncio, unittest.mock |
 | CI | GitHub Actions |
 | Deployment | Docker on Render (free tier) |
+
+## Project structure
+
+```
+orchestrator/
+  config.py        - centralized, validated settings (pydantic-settings)
+  mcp_clients.py    - MCP client wrappers for ai-sql-agent-mcp and ai-document-mcp
+  web_agent.py       - Tavily-based web research specialist
+  graph.py             - LangGraph supervisor + tool-calling loop
+  server.py             - FastMCP server: orchestrate tool, /health, /demo, /demo/query
+tests/                     - pytest suite, all external calls mocked
+.github/workflows/ci.yml   - runs the test suite on every push and PR
+Dockerfile
+```
+
+## Running locally
+
+Requires Python 3.12+ and API keys for Anthropic and Tavily.
+
+```bash
+git clone https://github.com/rajmyagentit-del/AI-MULTIAGENT-ARCHESTRATOR.git
+cd AI-MULTIAGENT-ARCHESTRATOR
+pip install -r requirements.txt
+cp .env.example .env   # then fill in your real keys
+python orchestrator/server.py
+```
+
+The server starts on `http://localhost:8000`. Visit `/demo` in a browser, or:
+
+```bash
+curl -X POST http://localhost:8000/demo/query \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How many customers do we have?"}'
+```
+
+## Running with Docker
+
+```bash
+docker build -t ai-multiagent-orchestrator .
+docker run -p 8000:8000 --env-file .env ai-multiagent-orchestrator
+```
+
+## Environment variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes | Claude API key |
+| `TAVILY_API_KEY` | Yes | Tavily search API key |
+| `SQL_AGENT_MCP_URL` | No | Defaults to the live Project 1 deployment |
+| `DOCUMENT_AGENT_MCP_URL` | No | Defaults to the live Project 2 deployment |
+| `PORT` | No | Defaults to 8000; Render sets this automatically |
+
+## Testing
+
+```bash
+python -m pytest tests/ -v
+```
+
+10 tests, all passing, all external services (Anthropic, Tavily, both MCP servers) mocked -- CI runs standalone with no real secrets required. Tests cover:
+- Correct MCP tool-call argument names (regression coverage for two real bugs found during development -- see Engineering Notes)
+- Error handling when a specialist fails or is unreachable
+- The supervisor's routing decision logic
+- The full supervisor<->tools loop end-to-end (mocked LLM + mocked specialist)
+
