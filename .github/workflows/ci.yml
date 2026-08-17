@@ -23,4 +23,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run test suite
+        env:
+          ANTHROPIC_API_KEY: test-placeholder-key
+          TAVILY_API_KEY: test-placeholder-key
         run: python -m pytest tests/ -v
